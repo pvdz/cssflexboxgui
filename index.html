@@ -1,0 +1,211 @@
+<!doctype html>
+<html>
+<title>CSS Flexbox GUI Composer</title>
+<meta charset="UTF-8">
+<meta name='description' lang='en' content='A free web GUI for composing CSS Flexbox grids and auto-generating html as result' />
+<style>
+  html, body, p { padding: 0; margin: 0; }
+  html { height: 100%; }
+  body { min-height: 100%; display: flex; flex-direction: column; background-color: lightcyan; }
+  button { height: 20px; }
+  div { clear: left; display: flex; }
+  #buttons { background-color: lightgoldenrodyellow; height: 35px; align-items: center; }
+  #buttons button { margin-right: 5px; }
+  #buttons input { width: 50px; text-align: center; margin-right: 5px; height: 20px; justify-content: center; }
+  #c { background-color: lightgreen; flex-grow: 1; }
+  .box { border: 2px solid black; margin: 5px; padding: 5px; background-color: #f2ff80; }
+</style>
+<body>
+<div id="header">CSS Flexbox GUI Composer &mdash; Peter "master designer" van der Zee &mdash; April 2019 &mdash; &copy;&nbsp;<a href="https://pvdz.ee">pvdz.ee</a></div>
+<div id="buttons"></div>
+<div id="c">
+</div>
+<script>
+  let flexDefs = {
+    'flex-direction': 'row',
+    'flex-wrap': 'nowrap',
+    'justify-content': 'flex-start',
+    'align-items': 'stretch',
+    'align-content': 'stretch',
+    'align-self': 'auto',
+    'order': '0',
+    'flex-grow': '0',
+    'flex-shrink': '1',
+    'flex-basis': '0%',
+  };
+  let flexOpts = {
+    // 'flex': = shorthand
+    'flex-direction': ['row', 'row-reverse', 'column', 'column-reverse'],
+    'flex-wrap': ['nowrap', 'wrap', 'wrap-reverse'],
+    // 'flex-flow', = shorthand for direction and wrap
+    'justify-content': ['flex-start', 'flex-end', 'center', 'space-between', 'space-around', 'space-evenly'],
+    'align-items': ['stretch', 'flex-start', 'flex-end', 'center', 'baseline'],
+    'align-content': ['stretch', 'flex-start', 'flex-end', 'center', 'space-between', 'space-around'],
+    'align-self': ['stretch', 'auto', 'flex-start', 'flex-end', 'center', 'baseline'],
+    // 'order': 'default',
+    // 'flex-grow': 1,
+    // 'flex-shrink': 1,
+    // 'flex-basis': 'auto',
+  };
+
+  let n = 0;
+
+  class Box {
+    constructor() {
+      this.id = 'box'+(++n);
+      this.config = {}; // each key in flexOpts an index to the array (this.config.foo -> flexOpts.foo[this.config.foo])
+      for (let key in flexOpts) this.config[key] = 0;
+      this.config['order'] = 'initial';
+      this.config['flex-grow'] = 1;
+      this.config['flex-shrink'] = 1;
+      this.config['flex-basis'] = 'auto';
+      this.children = [];
+    }
+
+    getConfigString() {
+      return Object
+        .getOwnPropertyNames(this.config)
+        .map(name => {
+          let v = (['flex-grow', 'flex-shrink', 'flex-basis', 'order'].includes(name) ?
+            this.config[name]
+            :
+            flexOpts[name][this.config[name]]);
+          if (flexDefs[name] === v) return '';
+          return '    ' + name + ': ' + v + ';';
+        }).filter(s => !!s).join('\n')
+    }
+
+    toString() {
+      let str = `
+<div
+  id="${this.id}"
+  class="box"
+  style="
+${this.getConfigString()}
+  "
+>
+  <p style="float:left">
+    ${this.id}
+    <button ${this===cbox?'style="background-color: lightgreen;"':''} title="click select this box to be configured by the bar at the top">focus</button>
+    <button title="add new box to this bix">add</button>
+    ${this === root ? '' : '<button title="delete this box and all descendants">del</button>'}
+  </p>
+${this.children.map(c => c.toString()).join('')}
+</div>
+      `;
+
+      return '  ' + str.split('\n').map(s => s.trimEnd()).filter(s => !!s).join('\n' + '  ')+'\n';
+    }
+  }
+
+  let root = new Box;
+  let cbox = root; // "current box" for button controls
+  root.children.push(new Box, new Box);
+  root.children[0].children.push(new Box, new Box, new Box);
+  root.children[0].config['flex-direction'] = 2;
+
+  function getBoxById(id, box = root) {
+    // dfs
+    if (box.id === id) return box;
+    for (let c of box.children) {
+      let s = getBoxById(id, c);
+      if (s) return s;
+    }
+    return null;
+  }
+
+  function getBoxWrapper(node) {
+    while (node && !node.classList.contains('box')) node = node.parentNode;
+    return node;
+  }
+
+  c.onclick = e => {
+    // console.log('clicked', e.target);
+
+    if (e.target.nodeName === 'BUTTON') {
+      let button = e.target;
+      let el = getBoxWrapper(button);
+      let box = getBoxById(el.id);
+      switch (button.innerHTML) {
+        case 'focus':
+          cbox = box;
+          break;
+        case 'add':
+          box.children.push(new Box);
+          cbox = box;
+          break;
+        case 'del':
+          // cant be root (has no button)
+          if (cbox === box) {
+            cbox = root;
+          }
+          let pbox = getBoxById(getBoxWrapper(el.parentNode).id);
+          pbox.children.splice(pbox.children.indexOf(box), 1);
+          break;
+        default:
+          throw new Error('what button was pressed?', e.target.innerHTML, e.target);
+      }
+    } else {
+      return; // ignore... (or treat as add?)
+    }
+
+    draw();
+    controls();
+  };
+
+  function draw() {
+    let s = root.toString();
+    // console.log('output:', s);
+    c.innerHTML = s;
+  }
+
+  let ta;
+  function dump() {
+    // the boilerplate is to force the flex wrapper to grow the entire viewport in _both_ axis
+    console.log(ta.value = 'Export:\n' +
+      '<style>body, div { display: flex; }</style>\n' +
+      '<body style="flex-direction: column;">\n' +
+      '  <div style="flex-grow: 1">\n' +
+      '  ' + root.toString().split('\n').join('\n  ') +
+      '\n  </div>' +
+      '\n</body>'
+    );
+  }
+
+  // Create control panel at top
+  function controls() {
+    buttons.innerHTML = `
+      Focus: ${cbox.id}
+      Grow: <input onchange="parseFloat(this.value) >= 0 && (cbox.config['flex-grow'] = parseFloat(this.value)); draw();" value="${cbox.config['flex-grow']}"/>
+      Shrink: <input onchange="parseFloat(this.value) >= 0 && (cbox.config['flex-shrink'] = parseFloat(this.value)); draw();" value="${cbox.config['flex-shrink']}"/>
+      Basis: <input onchange="cbox.config['flex-basis'] = this.value; draw()" value="${cbox.config['flex-basis']}"/>
+      Order: <input onchange="cbox.config['order'] = (isNaN(parseInt(this.value,10)) ? 0 : parseInt(this.value,10)); draw()" value="${cbox.config['order']||0}"/>
+    `;
+    Object
+    .getOwnPropertyNames(flexOpts)
+    .map(name => {
+      let button = document.createElement('button');
+      button.innerHTML = name + ': <b>' + flexOpts[name][cbox.config[name]] + '</b>';
+      button.onclick = e => {
+        cbox.config[name] = (cbox.config[name]+1) % flexOpts[name].length;
+        draw();
+        controls();
+      };
+      buttons.appendChild(button);
+    });
+    let exp = document.createElement('button');
+    buttons.appendChild(exp);
+    exp.innerHTML = 'export';
+    exp.onclick = dump;
+
+    ta = document.createElement('textarea');
+    ta.style.height = '25px';
+    buttons.appendChild(ta);
+  }
+
+  draw();
+  controls();
+  // dump();
+</script>
+</body>
+</html>
