@@ -164,7 +164,8 @@ ${this.children.map(c => c.toString()).join('')}
     // the boilerplate is to force the flex wrapper to grow the entire viewport in _both_ axis
     console.log(ta.value = 'Export:\n' +
       '<style>body, div { display: flex; }</style>\n' +
-      '<body style="flex-direction: column;">\n' +
+      '<html style="height: 100%;">\n'+
+      '<body style="min-height: 100%; flex-direction: column;">\n' +
       '  <div style="flex-grow: 1">\n' +
       '  ' + root.toString().split('\n').join('\n  ') +
       '\n  </div>' +
